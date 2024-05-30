@@ -12,6 +12,8 @@ pub struct window{
     events : GlfwReceiver<(f64, WindowEvent)>,
     width : u32,
     height : u32
+    //lol
+
 }
 
 
