@@ -4,7 +4,9 @@ use glfw::{Action, Context, Key, WindowEvent, PWindow, fail_on_errors, WindowHin
 use std::sync::mpsc::Receiver;
 use gl::types::*;
 use core::ffi::c_uint;
+use std::ffi::c_void;
 use std::mem::size_of;
+use std::ffi::CString;
 
 pub struct window{
     glfw : glfw::Glfw,
@@ -45,13 +47,15 @@ impl window {
         unsafe {
             gl::Viewport(0, 0, self.width.try_into().unwrap(), self.height.try_into().unwrap());
         }
+
         self.drawing_things();
         while !self.window_handle.should_close(){
             unsafe {
           //      gl::ClearColor(0.2, 0.3, 0.3, 1.0);
-                gl::Clear(gl::COLOR_BUFFER_BIT);
+            //    gl::Clear(gl::COLOR_BUFFER_BIT);
 
-                gl::DrawArrays(gl::TRIANGLES, 0, 3);
+              //  gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
+             //   gl::BindVertexArray(0);
                // gl::DrawElements(gl::TRIANGLES, 3, )
             }
 
@@ -71,23 +75,80 @@ impl window {
     }
     pub fn drawing_things(&self){
         unsafe {
+            gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
             let mut buffer : c_uint = 0;
-            let pos : [f32; 6] = [
-                -0.5, 0.5,
-                0.0, 0.5,
-                0.5, -0.5
+            let pos : [f32; 12] = [
+                //first triangle
+                0.5,  0.5, 0.0, // top right
+                0.5, -0.5, 0.0, // bottom right
+                -0.5, -0.5, 0.0, // bottom left
+                -0.5,  0.5, 0.0  // top left
             ];
 
-            let mut VAO : c_uint = 0;
+            let indices : [i32; 6] = [
+                0, 1, 3, // first triangle (top right, bottom right, top left)
+                1, 2, 3  // second triangle (bottom right, bottom left, top left)
+            ];
+            let buffer_size = (pos.len() * std::mem::size_of::<f64>()) as GLsizeiptr;
+            let EBO_buffer_size  = (indices.len() * std::mem::size_of::<i32>()) as GLsizeiptr;
+
+
+            let mut VAO : GLuint = 0;
             gl::GenVertexArrays(1, &mut VAO);
             gl::BindVertexArray(VAO);
 
-            let buffer_size = (pos.len() * std::mem::size_of::<f64>()) as GLsizeiptr;
-            gl::GenBuffers(1, &mut buffer);
-            gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
-            gl::BufferData(gl::ARRAY_BUFFER, buffer_size ,pos.as_ptr() as *const GLvoid, gl::STATIC_DRAW);
+            let mut VBO : c_uint = 0;
+            gl::GenBuffers(1, &mut VBO);
+            gl::BindBuffer(gl::ARRAY_BUFFER, VBO);
+            gl::BufferData(gl::ARRAY_BUFFER, buffer_size, pos.as_ptr() as *const c_void, gl::STATIC_DRAW);
+
+            let mut EBO : GLuint = 0;
+            gl::GenBuffers(1,&mut EBO);
+            gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, EBO);
+            gl::BufferData(gl::ELEMENT_ARRAY_BUFFER, EBO_buffer_size, indices.as_ptr() as *const c_void, gl::STATIC_DRAW);
+
+//            gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, EBO);
+  //          gl::BufferData(gl::ELEMENT_ARRAY_BUFFER, EBO_buffer_size, indices.as_ptr() as *const c_void, gl::STATIC_DRAW);
+
+
+            let vertex_shader_source = "#version 330 core\n layout (location = 0) in vec3 aPos; void main() { gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0); }";
+            let c_str_source = CString::new(vertex_shader_source).unwrap();
+            let mut vertexshader: GLuint = 0;
+
+            vertexshader = gl::CreateShader(gl::VERTEX_SHADER);
+            gl::ShaderSource(vertexshader, 1, &c_str_source.as_ptr(), std::ptr::null());
+            gl::CompileShader(vertexshader);
+
+            let mut fragmentshader : GLuint;
+            fragmentshader = gl::CreateShader(gl::FRAGMENT_SHADER);
+
+            let fragment_shader_source = "#version 330 core\n out vec4 FragColor; \n void main(){ \n FragColor = vec4(1.0f); \n }";
+
+            let fragment_c_source = CString::new(fragment_shader_source).unwrap();
+            gl::ShaderSource(fragmentshader, 1,  &fragment_c_source.as_ptr(), std::ptr::null());
+            gl::CompileShader(fragmentshader);
+
+            let mut shader_program : GLuint;
+            shader_program = gl::CreateProgram();
+
+            gl::AttachShader(shader_program, vertexshader);
+            gl::AttachShader(shader_program, fragmentshader);
+            gl::LinkProgram(shader_program);
+
+            gl::UseProgram(shader_program);
+
+            gl::DeleteShader(vertexshader);
+            gl::DeleteShader(fragmentshader);
+
+            gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 3 * 4, std::ptr::null());
             gl::EnableVertexAttribArray(0);
-            gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, 8, std::ptr::null());
+
+            gl::UseProgram(shader_program);
+
         }
+    }
+
+    pub fn drawing_two_trig(&self){
+
     }
 }
