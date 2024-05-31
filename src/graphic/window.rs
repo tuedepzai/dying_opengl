@@ -7,7 +7,8 @@ use core::ffi::c_uint;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ffi::CString;
-
+use std::env;
+use std::fs;
 pub struct window{
     glfw : glfw::Glfw,
     window_handle : PWindow,
@@ -36,7 +37,13 @@ pub fn new(width : u32 , height : u32, title : &str) -> window {
     };
     return r_window;
 }
+fn read_text_file(filePath : &str) -> CString{
+    let bind :String = fs::read_to_string(filePath).unwrap();
+    let concept : &str = bind.as_str();
 
+    CString::new(concept).unwrap()
+
+}
 impl window {
     pub fn start(&mut self){
         gl::Viewport::load_with(|s| self.window_handle.get_proc_address(s));
@@ -48,15 +55,15 @@ impl window {
             gl::Viewport(0, 0, self.width.try_into().unwrap(), self.height.try_into().unwrap());
         }
 
-        self.drawing_things();
+        self.drawing_two_trig();
         while !self.window_handle.should_close(){
             unsafe {
-          //      gl::ClearColor(0.2, 0.3, 0.3, 1.0);
-            //    gl::Clear(gl::COLOR_BUFFER_BIT);
+                gl::ClearColor(0.2, 0.3, 0.3, 1.0);
+                gl::Clear(gl::COLOR_BUFFER_BIT);
 
               //  gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
              //   gl::BindVertexArray(0);
-               // gl::DrawElements(gl::TRIANGLES, 3, )
+                gl::DrawArrays(gl::TRIANGLES,0, 6);
             }
 
 
@@ -148,7 +155,97 @@ impl window {
         }
     }
 
-    pub fn drawing_two_trig(&self){
 
+    pub fn drawing_two_trig(&self){
+        let vert : [f32 ; 18] = [
+            -0.9, -0.5, 0.0,  // left
+            -0.0, -0.5, 0.0,  // right
+            -0.45, 0.5, 0.0,  // top
+            // second triangle
+            0.0, -0.5, 0.0,  // left
+            0.9, -0.5, 0.,  // right
+            0.45, 0.5, 0.0   // top
+        ];
+
+        unsafe {
+            let vertex_shader_source = "#version 330 core\n layout (location = 0) in vec3 aPos; void main() { gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0); }";
+            let c_str_source = CString::new(vertex_shader_source).unwrap();
+            let mut vertexshader: GLuint = 0;
+
+            vertexshader = gl::CreateShader(gl::VERTEX_SHADER);
+            gl::ShaderSource(vertexshader, 1, &c_str_source.as_ptr(), std::ptr::null());
+            gl::CompileShader(vertexshader);
+
+            let mut fragmentshader : GLuint;
+            fragmentshader = gl::CreateShader(gl::FRAGMENT_SHADER);
+
+            let fragment_shader_source = "#version 330 core\n out vec4 FragColor; \n void main(){ \n FragColor = vec4(.2f); \n }";
+
+            let fragment_c_source = CString::new(fragment_shader_source).unwrap();
+            gl::ShaderSource(fragmentshader, 1,  &fragment_c_source.as_ptr(), std::ptr::null());
+            gl::CompileShader(fragmentshader);
+
+            let mut VAO : GLuint = 0;
+            gl::GenVertexArrays(1, &mut VAO);
+            gl::BindVertexArray(VAO);
+
+            let mut VBO : GLuint = 0;
+            gl::GenBuffers(1, &mut VBO);
+            gl::BindBuffer(gl::ARRAY_BUFFER, VBO);
+
+            gl::BufferData(gl::ARRAY_BUFFER, (vert.len() * std::mem::size_of::<f32>()).try_into().unwrap(), vert.as_ptr() as *const c_void, gl::STATIC_DRAW);
+
+            let mut Programe = gl::CreateProgram();
+            gl::AttachShader(Programe, vertexshader);
+            gl::AttachShader(Programe, fragmentshader);
+            gl::LinkProgram(Programe);
+            gl::DeleteShader(vertexshader);
+            gl::DeleteShader(fragmentshader);
+
+            gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 4 *3, std::ptr::null());
+            gl::EnableVertexAttribArray(0);
+            gl::UseProgram(Programe);
+
+        }
+
+
+    }
+
+
+    pub fn drawing_two_trig_but_diff_vbo_vao(){
+        let mut fvert : [f32; 9] =[
+            -0.9, -0.5, 0.0,
+            -0.0, -0.5, 0.0,
+            -0.45, 0.5, 0.0,
+
+        ];
+
+        let mut svert : [f32; 9] =[
+            0.0, -0.5, 0.0,  // left
+            0.9, -0.5, 0.0,  // right
+            0.45, 0.5, 0.0
+        ];
+        let mut VAOs : [GLuint; 2] = [0, 0];
+        let mut VBOs : [GLuint; 2] = [0, 0];
+        unsafe {
+            // coppying vertex from cpu to gpu!!11
+            gl::GenVertexArrays(2, VAOs.as_mut_ptr());
+            gl::BindVertexArray(VAOs[0]);
+            gl::BindVertexArray(VAOs[1]);
+            gl::GenBuffers(2, VBOs.as_mut_ptr());
+            //first trig setup
+
+
+            gl::BindBuffer(gl::ARRAY_BUFFER, VBOs[0]);
+            gl::BufferData(gl::ARRAY_BUFFER, (fvert.len() * std::mem::size_of::<f32>()).try_into().unwrap(), fvert.as_ptr() as *const c_void, gl::STATIC_DRAW)
+
+            //second trig setup
+            gl::BindBuffer(gl::ARRAY_BUFFER, VBOs[1]);
+            gl::BufferData(gl::ARRAY_BUFFER, (svert.len() * std::mem::size_of::<f32>()).try_into().unwrap(), svert.as_ptr() as *const c_void, gl::STATIC_DRAW)
+
+            // vertex shade and fragment shader!!11!!
+            let vertex_shader_source = "#version 330 core\n layout (location = 0) in vec3 aPos; void main() { gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0); }";
+            let fragment_shader_source = "#version 330 core\n out vec4 FragColor; \n void main(){ \n FragColor = vec4(1.0f); \n }";
+        }
     }
 }
